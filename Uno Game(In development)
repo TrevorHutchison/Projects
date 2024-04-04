@@ -1,0 +1,317 @@
+import java.util.ArrayList;
+import java.util.InputMismatchException;
+import java.util.Scanner;
+
+import javax.naming.directory.InvalidSearchFilterException;
+
+public class unoGame {
+    private unoDeck deck;
+    private unoPile pile;
+    private int currentPlayer;
+    private int direction;
+    private ArrayList<unoPlayer> players;
+    @SuppressWarnings("unused")
+    private int nextPlayerDebuff;
+
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    public unoGame() {
+        this.deck = new unoDeck();
+        this.pile = new unoPile();
+        this.currentPlayer = 0;
+        this.direction = 1;
+        this.players = new ArrayList();
+        this.nextPlayerDebuff = 0;
+    }
+
+    @SuppressWarnings("resource")
+    private void setup() {
+        deck.shuffle();
+
+        int numPlayers = 0;
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("How many players?: ");
+        while (true) {
+            try {
+                numPlayers = scanner.nextInt();
+                if (numPlayers < 2) {
+                    throw new IndexOutOfBoundsException("Must have at least 2 players: ");
+                }
+                break;
+            } catch (IndexOutOfBoundsException e) {
+                System.out.print(e.getMessage());
+            } catch (Exception e) {
+                System.out.print("Please enter an Integer: ");
+                scanner.next();
+            }
+        }
+        for (int i = 0; i < numPlayers; i++) {
+            String name;
+            System.out.print("Enter player " + (i + 1) + "'s name: ");
+            while (true) {
+                try {
+                    name = scanner.next();
+                    // checks if name is the same as another name
+                    for (unoPlayer p : players) {
+                        if (p.getName().toString().equalsIgnoreCase(name)) {
+                            throw new InputMismatchException();
+                        }
+                    }
+                    players.add(new unoPlayer(name));
+                    for (int j = 0; j < 7; j++) {
+                        players.get(i).draw(deck);
+                    }
+                    break;
+
+                } catch (Exception e) {
+                    System.out.print("Please enter a vaild name: ");
+                    scanner.next();
+                }
+            }
+            System.out.println(players.get(i).getName() + "'s hand: " + players.get(i).getHand());
+        }
+        System.out.println("\n\nSTARTING GAME");
+
+        do { // ensures the top card is not a special card
+            deck.shuffle();
+        } while (deck.nextCard().getValue() == value.WILD || deck.nextCard().getValue() == value.WILD_DRAW_FOUR
+                || deck.nextCard().getValue() == value.DRAW_TWO || deck.nextCard().getValue() == value.REVERSE
+                || deck.nextCard().getValue() == value.SKIP);
+
+        pile.addCard(deck.draw());
+    }
+
+    private void nextPlayer() {
+        currentPlayer += direction;
+        if (currentPlayer < 0) {
+            currentPlayer = players.size() - 1;
+        } else if (currentPlayer >= players.size()) {
+            currentPlayer = 0;
+        }
+    }
+
+    private void playCard(int p, int c) {
+        players.get(p).play(players.get(p).getHand().get(c - 1), pile);
+    }
+
+    @SuppressWarnings("resource")
+    private void changeTopColor() {
+        Scanner scanner = new Scanner(System.in);
+        int colorChoice = -1;
+        System.out.println(
+                "Enter the color you want to change the pile to \n1.RED, \n2.YELLOW, \n3.GREEN, \n4BLUE: ");
+        while (true) {
+            try {
+                colorChoice = scanner.nextInt();
+                if (colorChoice < 1 || colorChoice > 4) {
+                    throw new IndexOutOfBoundsException();
+                }
+                break;
+
+            } catch (Exception e) {
+                System.out.print("Input must be between 1 and 4: ");
+            }
+        }
+        switch (colorChoice) {
+            case 1:
+                pile.top().setColor(color.RED);
+                break;
+            case 2:
+                pile.top().setColor(color.YELLOW);
+                break;
+            case 3:
+                pile.top().setColor(color.GREEN);
+                break;
+            default:
+                pile.top().setColor(color.BLUE);
+                break;
+        }
+    }
+
+    @SuppressWarnings("resource")
+    public void play() {
+        setup();
+        int nextPlayerDebuff = 0;
+
+        while (true) {
+            Scanner scanner = new Scanner(System.in);
+            
+            unoPlayer currentPlayer = players.get(this.currentPlayer);
+
+            System.out.println("\n\n" + currentPlayer.getName() + "'s turn");
+
+            currentPlayer.setPile(pile.top());
+            currentPlayer.genCards();
+
+            System.out.println("Top card: " + pile.top() + "\n");
+            System.out.print("Your hand:\n");
+            for (int i = 0; i < currentPlayer.getHand().size(); i++) {
+                unoCard card = currentPlayer.getHand().get(i);
+                System.out.print((i + 1) + ". " + card + "\n");
+            }
+            System.out.println();
+
+            // prompt the player to choose a card or draw - loops if invalid input
+            int choice = -10; //defaults to an invalid choice
+
+
+            //handles the case if a player has to draw cards
+            if (nextPlayerDebuff > 0) {
+                if (currentPlayer.canStack(pile.top())) {
+                    System.out.println("You can stack the +2 or +4! Enter -1 to draw anyways or the number of the card you want to play: ");
+                    while (true) {
+                        try {
+                            choice = scanner.nextInt();
+                            if (choice == -1) {
+                                System.out.println("You have to draw " + nextPlayerDebuff + " cards!");
+                                for (int i = 0; i < nextPlayerDebuff; i++) {
+                                    currentPlayer.draw(deck);
+                                }
+                                nextPlayerDebuff = 0;
+                                nextPlayer();
+                                continue;
+                            }
+                            if (choice > currentPlayer.getHand().size() || choice < currentPlayer.getHand().size()) {
+                                throw new IndexOutOfBoundsException();
+                            }
+                            if (currentPlayer.getHand().get(choice - 1).getValue() != value.WILD
+                             || currentPlayer.getHand().get(choice - 1).getValue() != value.WILD_DRAW_FOUR) {
+                                throw new InputMismatchException();
+                            }
+                            if (currentPlayer.getHand().get(choice - 1).getValue() != pile.top().getValue()) {
+                                throw new InvalidSearchFilterException();
+                            }
+                            handleCard(choice);
+                            continue;
+                        } catch (IndexOutOfBoundsException e) {
+                            System.out.print("Please enter a valid number: ");
+                        } catch (InputMismatchException e) {
+                            System.out.print("You can only stack a +2 or +4! Please enter a valid card or draw: ");
+                        } catch (InvalidSearchFilterException e) {
+                            System.out.print("Can't play " + currentPlayer.getHand().get(choice - 1) + " here. Please select a valid card or draw.");
+                        } catch (Exception e) {
+                            System.out.print("Please enter a valid number: ");
+                            scanner.next();
+                        }
+                    }
+                } else {
+                    System.out.println("You have to draw " + nextPlayerDebuff + " cards!");
+                    for (int i = 0; i < nextPlayerDebuff; i++) {
+                        currentPlayer.draw(deck);
+                    }
+                    nextPlayerDebuff = 0;
+                    nextPlayer();
+                    continue;
+                }
+            }
+            
+            //runs normally if the player doesn't have to draw cards
+            System.out.print(currentPlayer.getName().toUpperCase()
+                        + ", Enter the number of the card you want to play (1-"
+                        + (currentPlayer.getHand().size()) 
+                        + " to draw a card) / [-1 to draw a card]: ");
+            while(true) {
+                try {
+                    choice = scanner.nextInt();
+                    if (choice < -1 || choice > currentPlayer.getHand().size() || choice == 0) {
+                        throw new IndexOutOfBoundsException();
+                    } else if (choice != -1 && !currentPlayer.getHand().get(choice - 1).isPlayable(pile.top())) {
+                        throw new InvalidSearchFilterException();
+                    }
+                    break;
+                } catch (InvalidSearchFilterException e) {
+                    System.out.println("Can't play " + currentPlayer.getHand().get(choice - 1) + " here. Please select a valid card or draw.");
+                } catch (IndexOutOfBoundsException e) {
+                    System.out.print("Please enter a valid number: ");
+                } catch (Exception e) {
+                    System.out.print("Please enter a valid number: ");
+                    scanner.next();
+                }
+            }
+
+            if (choice == -1) { // if player chooses to draw a card, give them a card
+                unoCard drawnCard = deck.draw();
+                currentPlayer.setDraw(drawnCard);
+                System.out.println("You drew a " + drawnCard);
+
+                // Check if the drawn card matches the top card's value or color, or if it's a wild card
+                if (drawnCard.getValue() == pile.top().getValue() || drawnCard.getColor() == pile.top().getColor()
+                        || drawnCard.getValue() == value.WILD || drawnCard.getValue() == value.WILD_DRAW_FOUR) {
+                    System.out.print(
+                            "The drawn card matches the top card or is a Wild card! Do you want to play it? (y/n): ");
+                    String playDrawnCard;
+                    while (true) {
+                        try {
+                            playDrawnCard = scanner.next();
+                            if (!playDrawnCard.equalsIgnoreCase("y") && !playDrawnCard.equalsIgnoreCase("n")) {
+                                throw new InputMismatchException();
+                            }
+                            break;
+                        } catch (InputMismatchException e) {
+                            System.out.print("Please enter 'y' or 'n': ");
+                        }
+                    }
+                    if (playDrawnCard.equalsIgnoreCase("n")) {
+                        nextPlayer();
+                        continue;
+                    } else { // if player chooses to play the drawn card, add it to the pile
+                        choice = currentPlayer.getHand().size();
+                    }
+                }
+            } 
+            handleCard(choice);
+            if (currentPlayer.hasWon()) {
+                System.out.println(currentPlayer.getName() + " has won!");
+                break;
+            }
+            nextPlayer();
+        }
+
+
+
+            
+    }
+
+    private void handleCard(int choice) {
+        switch (players.get(currentPlayer).getHand().get(choice - 1).getValue()) {
+            case ZERO:
+            case ONE:
+            case TWO:
+            case THREE:
+            case FOUR:
+            case FIVE:
+            case SIX:
+            case SEVEN:
+            case EIGHT:
+            case NINE:
+                // if any of the above cases are true, play the card and move on to the next
+                // player
+                playCard(currentPlayer, choice);
+                break;
+
+            case DRAW_TWO:
+                playCard(currentPlayer, choice);
+                nextPlayerDebuff = 2;
+                break;
+            case WILD_DRAW_FOUR:
+                playCard(currentPlayer, choice);
+                nextPlayerDebuff = 4;
+                changeTopColor();
+                break;
+            case WILD:
+                playCard(currentPlayer, choice);
+                changeTopColor();
+                break;
+            case SKIP:
+                playCard(currentPlayer, choice);
+                nextPlayer();
+                break;
+            case REVERSE:
+                playCard(currentPlayer, choice);
+                direction *= -1;
+                break;
+
+            default:
+                System.out.println("Something went Horribly wrong");
+        }
+    }
+}
